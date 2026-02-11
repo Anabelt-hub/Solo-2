@@ -9,7 +9,7 @@
  * - Local dev (Flask): http://localhost:5000
  * - Deployed backend:  https://your-backend-host.com
  */
-const API_BASE = "http://localhost:5000";
+const API_BASE = "https://collection-api.onrender.com";
 
 const el = (id) => document.getElementById(id);
 
@@ -391,3 +391,4 @@ if (document.readyState === "loading") {
 } else {
   init();
 }
+
