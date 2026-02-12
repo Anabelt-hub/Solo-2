@@ -1,15 +1,14 @@
 "use strict";
 
 /**
- * Solo Project 2 (Step 1 update)
- * ✅ Browser no longer owns data (no localStorage)
- * ✅ All CRUD goes through backend via fetch()
- *
- * NOTE: Update API_BASE to your backend URL.
- * - Local dev (Flask): http://localhost:5000
- * - Deployed backend:  https://your-backend-host.com
+ * Solo Project 2 Frontend
+ * ✅ All data via backend (no localStorage)
+ * ✅ CRUD via fetch()
+ * ✅ Paging (10/page) + Next/Prev + indicator
+ * ✅ Stats via /api/stats (entire dataset)
  */
-const API_BASE = "https://solo-2-back.onrender.com";
+
+const API_BASE = "https://YOUR-RENDER-SERVICE.onrender.com"; // <-- CHANGE THIS
 
 const el = (id) => document.getElementById(id);
 
@@ -27,6 +26,11 @@ const recordsTbody = el("recordsTbody");
 const searchInput = el("searchInput");
 const statusFilter = el("statusFilter");
 const newBtn = el("newBtn");
+
+// Pager controls
+const prevBtn = el("prevPage");
+const nextBtn = el("nextPage");
+const pageIndicator = el("pageIndicator");
 
 // Form controls
 const recordForm = el("recordForm");
@@ -50,37 +54,40 @@ const statAvgRating = el("statAvgRating");
 const statTopGenre = el("statTopGenre");
 const statusBreakdown = el("statusBreakdown");
 
-// In-memory data (now populated from server)
+// Paging state (fixed page size required by rubric)
+let currentPage = 1;
+let totalPages = 1;
+const pageSize = 10;
+
+// Current page items only
 let records = [];
 
 /* --------------------------- API Helpers --------------------------- */
 async function apiFetch(path, options = {}) {
   const res = await fetch(`${API_BASE}${path}`, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
+    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
     ...options,
   });
 
   const contentType = res.headers.get("content-type") || "";
   const isJson = contentType.includes("application/json");
-  const data = isJson
-    ? await res.json().catch(() => null)
-    : await res.text().catch(() => null);
+  const data = isJson ? await res.json().catch(() => null) : await res.text().catch(() => null);
 
   if (!res.ok) {
-    const message = data && typeof data === "object" && data.error ? data.error : `Request failed (${res.status})`;
+    const message = (data && typeof data === "object" && data.error) ? data.error : `Request failed (${res.status})`;
     throw new Error(message);
   }
-
   return data;
 }
 
-// Basic CRUD endpoints (you will implement these on the backend)
-async function apiGetRecords() {
-  // If your backend returns { items: [...] }, we handle that in refreshFromServer()
-  return apiFetch("/api/records", { method: "GET" });
+async function apiGetRecords({ page, search, status }) {
+  const params = new URLSearchParams({
+    page: String(page),
+    pageSize: String(pageSize), // backend enforces 10 anyway
+    search: search || "",
+    status: status || "ALL",
+  });
+  return apiFetch(`/api/records?${params.toString()}`, { method: "GET" });
 }
 
 async function apiCreateRecord(record) {
@@ -95,11 +102,8 @@ async function apiDeleteRecord(id) {
   return apiFetch(`/api/records/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
-// Load latest dataset from server and re-render
-async function refreshFromServer() {
-  const data = await apiGetRecords();
-  records = Array.isArray(data) ? data : (data?.items || []);
-  renderList(); // keeps list + stats synced
+async function apiGetStats() {
+  return apiFetch("/api/stats", { method: "GET" });
 }
 
 /* --------------------------- View helpers --------------------------- */
@@ -113,6 +117,21 @@ function showView(which) {
   viewForm.classList.add("hidden");
   viewStats.classList.add("hidden");
   which.classList.remove("hidden");
+}
+
+function goList() {
+  setActiveTab(tabList);
+  showView(viewList);
+}
+
+function goForm() {
+  setActiveTab(tabForm);
+  showView(viewForm);
+}
+
+function goStats() {
+  setActiveTab(tabStats);
+  showView(viewStats);
 }
 
 /* --------------------------- Validation --------------------------- */
@@ -137,22 +156,19 @@ function validateFormData(data) {
 }
 
 /* --------------------------- Rendering --------------------------- */
-function getFilteredRecords() {
-  const q = searchInput.value.trim().toLowerCase();
-  const status = statusFilter.value;
-
-  return records.filter((r) => {
-    const matchesText = (r.title || "").toLowerCase().includes(q);
-    const matchesStatus = status === "ALL" ? true : r.status === status;
-    return matchesText && matchesStatus;
-  });
+function escapeHtml(str) {
+  return String(str)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
 function renderList() {
-  const filtered = getFilteredRecords();
-
   recordsTbody.innerHTML = "";
-  for (const r of filtered) {
+
+  for (const r of records) {
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${escapeHtml(r.title)}</td>
@@ -168,57 +184,48 @@ function renderList() {
     `;
     recordsTbody.appendChild(tr);
   }
-
-  renderStats(); // keep stats accurate even when user stays on list
 }
 
-function renderStats() {
-  statTotal.textContent = String(records.length);
+function renderPager() {
+  pageIndicator.textContent = `Page ${currentPage} of ${totalPages}`;
+  prevBtn.disabled = currentPage <= 1;
+  nextBtn.disabled = currentPage >= totalPages;
+}
 
-  const completed = records.filter((r) => r.status === "Completed");
-  statCompleted.textContent = String(completed.length);
+/* --------------------------- Stats --------------------------- */
+async function refreshStats() {
+  const stats = await apiGetStats();
 
-  const completedWithRating = completed.filter((r) => Number.isInteger(r.rating));
-  if (completedWithRating.length === 0) {
-    statAvgRating.textContent = "—";
-  } else {
-    const avg = completedWithRating.reduce((sum, r) => sum + r.rating, 0) / completedWithRating.length;
-    statAvgRating.textContent = avg.toFixed(1);
-  }
+  statTotal.textContent = String(stats.totalRecords ?? "—");
+  statCompleted.textContent = String(stats.completedCount ?? "—");
+  statAvgRating.textContent = (stats.avgRatingCompleted === null || stats.avgRatingCompleted === undefined)
+    ? "—"
+    : String(stats.avgRatingCompleted);
+  statTopGenre.textContent = stats.topGenre ? String(stats.topGenre) : "—";
 
-  const genreCounts = new Map();
-  for (const r of records) {
-    const g = String(r.genre || "").trim();
-    if (!g) continue;
-    genreCounts.set(g, (genreCounts.get(g) || 0) + 1);
-  }
-  let topGenre = "—";
-  let topCount = 0;
-  for (const [g, c] of genreCounts.entries()) {
-    if (c > topCount) {
-      topCount = c;
-      topGenre = g;
-    }
-  }
-  statTopGenre.textContent = topGenre;
-
-  const statuses = ["Planned", "Watching", "Completed", "Dropped"];
   statusBreakdown.innerHTML = "";
-  for (const s of statuses) {
-    const count = records.filter((r) => r.status === s).length;
+  const byStatus = stats.byStatus || {};
+  for (const s of ["Planned", "Watching", "Completed", "Dropped"]) {
     const li = document.createElement("li");
-    li.textContent = `${s}: ${count}`;
+    li.textContent = `${s}: ${byStatus[s] ?? 0}`;
     statusBreakdown.appendChild(li);
   }
 }
 
-function escapeHtml(str) {
-  return String(str)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+/* --------------------------- Data refresh --------------------------- */
+async function refreshFromServer() {
+  const data = await apiGetRecords({
+    page: currentPage,
+    search: searchInput.value.trim(),
+    status: statusFilter.value,
+  });
+
+  records = data.items || [];
+  currentPage = data.page || 1;
+  totalPages = data.totalPages || 1;
+
+  renderList();
+  renderPager();
 }
 
 /* --------------------------- Form helpers --------------------------- */
@@ -250,42 +257,54 @@ function fillForm(r) {
   formTitle.textContent = "Edit Record";
 }
 
-/* --------------------------- Navigation --------------------------- */
-function goList() {
-  setActiveTab(tabList);
-  showView(viewList);
-  renderList();
-}
-
-function goForm() {
-  setActiveTab(tabForm);
-  showView(viewForm);
-}
-
-function goStats() {
-  setActiveTab(tabStats);
-  showView(viewStats);
-  renderStats();
-}
-
 /* --------------------------- Events --------------------------- */
-tabList.addEventListener("click", goList);
+tabList.addEventListener("click", async () => {
+  goList();
+  await refreshFromServer();
+});
 
 tabForm.addEventListener("click", () => {
   clearForm();
   goForm();
 });
 
-tabStats.addEventListener("click", goStats);
+tabStats.addEventListener("click", async () => {
+  goStats();
+  await refreshStats();
+});
 
 newBtn.addEventListener("click", () => {
   clearForm();
   goForm();
 });
 
-searchInput.addEventListener("input", renderList);
-statusFilter.addEventListener("change", renderList);
+// Search/filter must reset to page 1
+searchInput.addEventListener("input", async () => {
+  currentPage = 1;
+  await refreshFromServer();
+});
 
+statusFilter.addEventListener("change", async () => {
+  currentPage = 1;
+  await refreshFromServer();
+});
+
+// Pager buttons
+prevBtn.addEventListener("click", async () => {
+  if (currentPage > 1) {
+    currentPage--;
+    await refreshFromServer();
+  }
+});
+
+nextBtn.addEventListener("click", async () => {
+  if (currentPage < totalPages) {
+    currentPage++;
+    await refreshFromServer();
+  }
+});
+
+// Table actions (edit/delete)
 recordsTbody.addEventListener("click", async (e) => {
   const btn = e.target.closest("button");
   if (!btn) return;
@@ -299,19 +318,28 @@ recordsTbody.addEventListener("click", async (e) => {
     goForm();
   }
 
-  if (action === "delete" && rec) {
-    const ok = confirm(`Delete "${rec.title}"? This cannot be undone.`);
+  if (action === "delete") {
+    const ok = confirm(`Delete "${rec?.title ?? "this record"}"? This cannot be undone.`);
     if (!ok) return;
 
     try {
       await apiDeleteRecord(id);
+
+      // Refresh current page; if page becomes empty, go back one page
       await refreshFromServer();
+      if (records.length === 0 && currentPage > 1) {
+        currentPage--;
+        await refreshFromServer();
+      }
+
+      await refreshStats();
     } catch (err) {
       alert(err.message);
     }
   }
 });
 
+// Form submit (add/edit)
 recordForm.addEventListener("submit", async (e) => {
   e.preventDefault();
 
@@ -325,7 +353,6 @@ recordForm.addEventListener("submit", async (e) => {
     notes: notesInput.value.trim(),
   };
 
-  // Client-side validation (server still validates too)
   const errs = validateFormData(data);
   if (errs.length > 0) {
     formError.textContent = errs.join(" ");
@@ -338,33 +365,41 @@ recordForm.addEventListener("submit", async (e) => {
   try {
     if (id) {
       await apiUpdateRecord(id, data);
+      // stay on same page
     } else {
       await apiCreateRecord(data);
+      // recommended: jump to page 1 so new item shows immediately
+      currentPage = 1;
     }
 
-    // Re-pull data from server and go back to list
     await refreshFromServer();
+    await refreshStats();
     goList();
   } catch (err) {
-    // Show server-side validation message (or general error)
     formError.textContent = err.message;
     formError.classList.remove("hidden");
   }
 });
 
-cancelBtn.addEventListener("click", goList);
+cancelBtn.addEventListener("click", () => goList());
 
 deleteBtn.addEventListener("click", async () => {
   const id = recordId.value;
   if (!id) return;
 
-  const rec = records.find((r) => r.id === id);
-  const ok = confirm(`Delete "${rec?.title ?? "this record"}"? This cannot be undone.`);
+  const ok = confirm(`Delete this record? This cannot be undone.`);
   if (!ok) return;
 
   try {
     await apiDeleteRecord(id);
+
     await refreshFromServer();
+    if (records.length === 0 && currentPage > 1) {
+      currentPage--;
+      await refreshFromServer();
+    }
+
+    await refreshStats();
     goList();
   } catch (err) {
     alert(err.message);
@@ -374,13 +409,14 @@ deleteBtn.addEventListener("click", async () => {
 /* --------------------------- Init --------------------------- */
 async function init() {
   try {
-    await refreshFromServer();
     goList();
+    await refreshFromServer();
+    await refreshStats();
   } catch (err) {
     console.error(err);
     alert(
-      `Could not load records from server.\n\n` +
-      `Make sure your backend is running and API_BASE is correct.\n\n` +
+      `Could not load from server.\n\n` +
+      `Check API_BASE in app.js and confirm your backend is running.\n\n` +
       `Error: ${err.message}`
     );
   }
@@ -391,5 +427,3 @@ if (document.readyState === "loading") {
 } else {
   init();
 }
-
-
