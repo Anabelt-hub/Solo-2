@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Local Collection Manager - Watchlist</title>
+  <title>Collection Manager - Watchlist</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -47,85 +47,98 @@
           <tbody id="recordsTbody"></tbody>
         </table>
       </div>
+
+      <!-- ✅ REQUIRED: Paging controls -->
+      <div class="pager">
+        <button id="prevPage">Previous</button>
+        <span id="pageIndicator">Page 1 of 1</span>
+        <button id="nextPage">Next</button>
+      </div>
     </section>
 
     <!-- FORM VIEW -->
     <section id="viewForm" class="view hidden">
-      <h2 id="formTitle">Add Record</h2>
+      <div class="card">
+        <div class="cardHeader">
+          <h2 id="formTitle">Add Record</h2>
+          <p class="muted">Fields marked with * are required.</p>
+        </div>
 
-      <form id="recordForm" class="card">
-        <input type="hidden" id="recordId" />
+        <form id="recordForm" class="form">
+          <input id="recordId" type="hidden" />
 
-        <div class="grid">
           <label>
-            Title *
-            <input id="title" maxlength="80" required />
+            Title * 
+            <input id="title" type="text" placeholder="e.g., The Dark Knight" required />
           </label>
 
           <label>
             Type *
             <select id="type" required>
               <option value="">Select...</option>
-              <option>Movie</option>
-              <option>TV</option>
+              <option value="Movie">Movie</option>
+              <option value="Show">Show</option>
+              <option value="Anime">Anime</option>
+              <option value="Book">Book</option>
+              <option value="Game">Game</option>
             </select>
           </label>
 
           <label>
             Genre *
-            <input id="genre" maxlength="30" required />
+            <input id="genre" type="text" placeholder="e.g., Action" required />
           </label>
 
-          <label>
-            Year *
-            <input id="year" type="number" min="1900" max="2100" required />
-          </label>
+          <div class="grid2">
+            <label>
+              Year *
+              <input id="year" type="number" min="1900" max="2100" required />
+            </label>
 
-          <label>
-            Rating (1–10)
-            <input id="rating" type="number" min="1" max="10" />
-          </label>
+            <label>
+              Rating (1–10)
+              <input id="rating" type="number" min="1" max="10" />
+            </label>
+          </div>
 
           <label>
             Status *
             <select id="status" required>
               <option value="">Select...</option>
-              <option>Planned</option>
-              <option>Watching</option>
-              <option>Completed</option>
-              <option>Dropped</option>
+              <option value="Planned">Planned</option>
+              <option value="Watching">Watching</option>
+              <option value="Completed">Completed</option>
+              <option value="Dropped">Dropped</option>
             </select>
           </label>
 
-          <label class="span2">
+          <label>
             Notes
-            <input id="notes" maxlength="120" placeholder="Optional short note..." />
+            <textarea id="notes" rows="3" placeholder="Anything you want to remember..."></textarea>
           </label>
-        </div>
 
-        <div class="formActions">
-          <button type="submit" class="primary" id="saveBtn">Save</button>
-          <button type="button" id="cancelBtn">Cancel</button>
-          <button type="button" id="deleteBtn" class="danger hidden">Delete</button>
-        </div>
+          <div id="formError" class="error hidden"></div>
 
-        <p class="hint">Fields marked * are required. Year must be 1900–2100. Rating must be 1–10.</p>
-        <p id="formError" class="error hidden"></p>
-      </form>
+          <div class="actions">
+            <button id="saveBtn" class="primary" type="submit">Save</button>
+            <button id="cancelBtn" type="button">Cancel</button>
+            <button id="deleteBtn" class="danger hidden" type="button">Delete</button>
+          </div>
+        </form>
+      </div>
     </section>
 
     <!-- STATS VIEW -->
     <section id="viewStats" class="view hidden">
-      <h2>Stats</h2>
       <div class="statsGrid">
         <div class="statCard">
-          <div class="statLabel">Total Records</div>
-          <div id="statTotal" class="statValue">0</div>
+          <div class="statLabel">Total Records (All)</div>
+          <div id="statTotal" class="statValue">—</div>
         </div>
 
         <div class="statCard">
-          <div class="statLabel">Completed Count</div>
-          <div id="statCompleted" class="statValue">0</div>
+          <div class="statLabel">Completed</div>
+          <div id="statCompleted" class="statValue">—</div>
         </div>
 
         <div class="statCard">
