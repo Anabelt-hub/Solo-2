@@ -8,7 +8,7 @@
  * ✅ Stats via /api/stats (entire dataset)
  */
 
-const API_BASE = "https://YOUR-RENDER-SERVICE.onrender.com"; // <-- CHANGE THIS
+const API_BASE = "https://solo-2-back.onrender.com"; // <-- CHANGE THIS
 
 const el = (id) => document.getElementById(id);
 
@@ -427,3 +427,4 @@ if (document.readyState === "loading") {
 } else {
   init();
 }
+
